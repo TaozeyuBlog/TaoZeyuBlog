@@ -1,0 +1,322 @@
+---
+node : technology
+title : JVM类装载机制的解析，以及热更新的探讨（一）
+---
+
+# 引言
+
+写这篇文章源自一年前对诸如此类问题的好奇和困惑，当时咨询过其他人，也搜集过一些资料，苦于当时不能立即解惑。之后断断续续过了一年，一直在零星搜集这方面的资料，直到今天，大致搜集圆满了。遂成此文，方便日后我自己查看，也分享给大家。
+
+文章内容其实很多都是我个人推断的结果，虽然有参考一些文献，但这些文献都是零星的，不完整的。（如果有人有完整的，总结性的文献，请发给我，感激不尽。这种文献一定是有的，只是我没找到而已。）用百度的话说，我这是“脑补文”，不是“干货文”。
+
+因此，尽管只有我认为是正确无误的内容我才会写入本文中，但也切勿在未经甄别的情况下引用本文内容。如有错误，请批评指正。
+
+Java是一种动态连接的语言。所谓动态连接，大概可以这么解释。
+
+首先，Java可以大概想象成是编译解释执行的。对于一个*.java的文件，通过javac将会编译成一个*.class文件。而JVM会解释执行*.class文件。但一个软件不可能只有一个class文件，一个项目往往有众多的class文件。这些class存储了足以供JVM执行的字节码，但却只有在连接之后才能执行。
+
+所谓的Java是动态连接的语言，是指class文件并非在编译时连接的，而是在运行时连接的。对于编译器而言，当它编译一个java文件，它就只会编译这个java文件，不同的java文件的编译彼此不会影响。（虽然javac会通过java文件之间的依赖关系搜索并编译其他的与之有依赖的java文件，且在搜索不到的时候报错，但实质上这只是一种主观上的限制罢了。）这也是Java编译器区别于C/C++编译器的地方。
+
+正因为class的连接发生在运行时，因此才需要考虑所谓的加载器，以及令讨论热更新成为可能。
+
+# JVM的类加载机制。
+
+JVM加载、连接的基本单位为class文件（或称一个类），值得注意的是，加载并非以java文件为单位。虽然大部分情况下一个java文件对应一个class文件，但是当java文件中定义了匿名类、内部类的时候，一个java文件将生成多个class文件。
+
+类是如何加载的呢？
+
+类的加载大致由这么几个步骤组成：
+
+- (1) 找到，并加载类的字节码
+- (2) 解析字节码，并进行安全性检查
+- (3) 初始化类
+- (?) 将符号引用转化为实例引用
+
+JVM的加载机制是很有趣的，以至于我所列出的四项中还出现了一个问号（不是我打错字了哦）。我将采用问答的形式引出这里面的玄机。
+
+问：这四个步骤分别在何时发生。
+
+答：除了第三部“初始化类”，其余的步骤均不知道何时发生。因为JVM只对第三步的执行的时机进行了定义，其他的都是未定义的。这意味着其他三步实现的时机依赖于虚拟机的具体实现。
+
+我们不能假定除了“初始化类”的其他步骤发生的时机！
+
+那么“初始化类”何时发生呢？初始化类，在且只能在第一次发生下列事情的任何一个时进行：类的静态成员变量被使用、类的静态方法被调用、类被实例化、类作为启动类需要被调用`main(String[])`方法、类的子类需要被初始化、反射操作涉及到该类。（应该就是这几个，没有记漏的话）
+
+值得注意的是，强制类型转化判定、获取类的实例（即Class对象），绝对不会触发初始化类事件，实际上在解析字节码，并进行安全性检查这一步骤的结果就是获得一个Class实例。
+
+因此，假定有一个类叫做com.tzy.A的类，下列语句是不会触发初始化类操作的：
+
+```
+Object obj = new Object();
+com.tzy.A a = (com.tzy.A) obj;
+Object obj=new Object();
+//使用反射的方法也不会！
+//可见不是所有的反射方法都会触发初始化类操作。
+com.tzy.A.class.isInstance obj);
+Class.forName("com.tzy.A");
+
+//而下列语句一定会触发初始化类操作！
+new com.tzy.A();
+com.tzy.A.someValue = 5;
+com.tzy.A.someMethod("helloworld");
+cmd:Java com.tzy.A
+
+public class com.tzy.B extends com.tzy.A{
+    ......
+}
+new com.tzy.B();//先初始化A，再初始化B。
+```
+
+所谓初始化类，指调用类中的static语句块，将所有静态变量赋初值等。在初始化过程中，不论是static语句块，还是静态变量赋初值调用的方法抛出异常，最终都会抛出一个`ExceptionIninitalizerError`。
+
+那好，现在我们仅仅知道了初始化类发生的时机，但却对其他三个发生的实际一无所知。现实真是这么悲观吗？也不完全是。
+
+我们知道，如果没有加载类的字节码，虚拟机如何解析并生成一个Class实例呢？如果没有一个Class实例，虚拟机如何初始化它呢？显然前三个步骤是递进的，后一个步骤依赖前一个步骤的完成。因此，对于步骤（1）（2），我们知道，最迟在（3）发生之前发生！
+
+那么步骤（？）何时发生呢？要理解步骤（？）何时发生，首先要理解（?）是个什么东西。
+
+首先，我们知道，单独个class文件的编译过程对于其他class文件是透明的。这意味着其他class文件在编译这个层面上无法印象到该class文件。但是，class文件对其他class文件的依赖关系是客观存在的。例如：
+
+```
+public class A{
+	public someMethod(){
+		com.tzy.B b;
+		b = (com.tzy.B)new Object();
+	}
+}
+```
+
+请看这段代码，如果我调用someMethod()方法，一定会抛出强制类型转换异常。为什么呢？因为Object一定不是com.tzy.B的子类？但是JVM如何知道com.tzy.B不是Object的子类呢？
+
+要知道在class文件中，对于com.tzy.B，存起来可能是像这种形式：
+
+```
+"com.tzy.B"
+```
+
+对，就只是一个字符串而已。但是它表示一个类，但是在编译阶段无法验证这个字符串表示到底哪一个类，这个工作只有虚拟机能做，编译器是不管的（除了语法上的验证，但我在后面会说明，有时这个语法上的验证是不应该有的）。
+
+字符串的理解，全凭虚拟机解释。虚拟机会将”com.tzy.B”这个字符串转化成一个Class实例。通过Class实例，可以访问到这个类的声明信息，因此，可以判断Object一定不是它的子类，从而抛出强制类型转换异常。
+
+这个过程就叫做将符号引用转化为实例引用。
+
+这个转化过程在何时发生呢？不知道。它一定发生在第二步之后，但既可能发生在第三步之前，也可能发生在第三步之后。
+
+因此，对于我们的一个应用程序，我们可以这么理解，以做个总结。
+
+1. 应用程序由许多class文件构成。
+2. 每一个class文件一般会依赖其他class文件，它将依赖的其他class的名字保留下来。所谓class文件的名字，一般是诸如`com.tzy.Test`、`java.lang.String`等等形式。<
+3. 对于应用程序而言，有且只有一个启动class文件，它是一个包含`public static void main(String[])`方法的 public 类。
+
+4. 因此，我们可以构造这么一张“图”。我们假定每一个class文件为一个节点。将启动class文件设为根节点。并定义，如果某一个class文件中出现了另外一个class文件的名字，则用一根单向箭头从这个class文件的节点指向另一个class文件节点。最终，我们得到了一张有一个根节点，且能表示class文件之间依赖关系的“图”。
+
+5. 而从根节点触发，可达的节点集合，则是我们的应用程序会被载入的class文件的最大集合！
+之所以是最大集合，是因为虚拟机的机制尽可能的减少加载如内存的class数量。但，好在我们得到了一个最大值。因此，可以安心的假定，离开这个集合的class绝对不会被载入。
+
+# 类装载器
+
+当某个类对其他类存在依赖关系时，这种依赖关系只会以符号引用的形式存在于class文件中。而这种符号引用所代表的类究竟是什么类，取决于虚拟机如何解释。解释的结果，是获取一段二进制的字节码。一般而言，这段二进制的字节码读取自文件，因此，所谓的将符号引用转化为实例引用，就是将类名定位到*.class文件。
+
+Java通过类加载器来实现二进制字节码的获取。
+
+除了极个别特殊的类，Java中绝大部分的类的实例（Class对象），都是通过某个类加载器的实例获取的。类加载器继承自一个抽象类ClassLoader。
+
+我们可以通过实例方法`Class.getClassLoader()`方法，来得到某个类的加载器。就像一个孩子只能由一个母亲所生一样，一个类实例只能有一个ClassLoader。
+
+ClassLoader的职能在于，通过类名，生成并返回一个Class实例。我们可以通过主动调用Class类的`forName`方法，指定使用某个ClassLoader载入Class实例。
+
+```
+Class.forName(String className,boolean init,ClassLoader classLoader)
+```
+
+主动调用这个方法，从而获取Class实例，我个人把这个叫做显式装载。
+
+此外，当虚拟机执行过程中需要获取某个Class实例，手头上却只有该类的符号引用时。虚拟机将隐式的使用类加载器加载这个类，并获取其实例。我把这个叫做隐式装载。
+
+无论装载是显式还是隐式，对于ClassLoader本身而言是一样的，最终会调用到ClassLoader的方法：
+
+```
+protected Class<&iexcl;> findClass(String className) throws ClassNotFoundException;
+```
+
+这个方法就是用来重写的。
+
+值得注意的是，隐式装载会使用哪一个ClassLoader呢？经过我的实验，隐式装载所使用的符号引用来自哪一个Class，则使用哪一个Class的ClassLoader。
+
+这种机制就会引发一个有趣的现象。还记得我之前说的“图”吗？当使用某一个ClassLoader载入某一个根class节点后，该class将逐步的、递归的、隐式的加载各种各样的class文件。而由此派生出来的Class对象，全部都是由最初的ClassLoader载入的。
+
+此外，不得不说的是，ClassLoader有两个重要的特征。其一是父节点委派机制，其二是符号引用隔离机制。（我自己取的名字，如果找到正确的名字请告诉我。）
+
+### 其一、父节点委派机制
+
+任何一个ClassLoader实例都可以看做家族树上的一个节点。这意味着你可以给ClassLoader分配一个父亲节点（父亲节点同样是ClassLoader），实际上，不管你愿不愿意，用户自定义的ClassLoader一定会分配一个父亲节点的！
+
+当使用某一个ClassLoader装载一个Class时（不论显式还是隐式），该ClassLoader一定会首先使用用它的父节点装载该Class。如果它的父节点能够装载，则直接返回，此时就没自己什么事了。只有当其父节点抛出`ClassNotFoundException时`，才调用自己的`findClass`方法装载。
+
+这就是父节点委派机制。注意，当子节点将装载任务委派给父节点时，父节点同样要遵循父节点委派机制，这样父节点首先还要将加载任务委派给它的父节点。这样变成了一个层层递归委派的过程。
+
+于是，处于家族树最顶端的ClassLoader拥有最高优先权。只有上端ClassLoader宣布它不能载入的Class，下端才能捡漏将其载入。因此，子节点休想越俎代庖，做了本该它父亲该做的事情。
+
+### 其二、符号引用隔离机制
+
+JVM为每一个ClassLoader实例（注意不是类，是实例）维系了一个个彼此独立的命名空间。这种命名空间仅在虚拟机上表现，在语言层面无法表现。因此，在编写Java程序时，常常无法感受到命名空间的存在。
+
+为了描述命名空间为何物，我想举一个例子：
+
+```
+//File:ClassA.java
+
+public ClassA{
+
+	private static ClassB classB = new ClassB();
+
+	public void setClassB(Object obj){
+		classB = (ClassB)obj;
+	}
+
+	public Object getClassB(){
+		return classB;
+	}
+}
+
+//File:ClassB.java
+public ClassB{
+	@Override
+	public String toString(){
+		return "className:ClassB";
+	}
+}
+```
+
+将这两个文件使用javac编译以后，存储在某一个文件夹中，如d:\test\ab。
+
+```
+//File:MyLoader.java
+
+import java.io.*;
+public class MyLoader extends ClassLoader{
+
+	@Override
+	public Class findClass(String name) throws ClassNotFoundException{
+		String className = name;
+		name = name.replace('.','\\')+".class";
+		File file = new File("D:\\test\\ab",name);
+		int length = (int)file.length();
+		byte[] bf = new byte[length];
+		InputStream is = null;
+		try{
+			is = new FileInputStream(file);
+			int start = 0;
+			int len = length;
+			while(true){
+				int i = is.read(bf,start,length);
+				length-=i;
+				start+=i;
+				if(0==i | -1==i){
+					break;
+				}
+			}
+		}catch(Exception e){
+			throw new ClassNotFoundException(e.getMessage());
+		}finally{
+			try{
+				is.close();
+			}catch(Exception e){
+				System.exit(1);
+			}
+		}
+		return defineClass(className, bf, 0, bf.length);
+	}
+}
+```
+
+该文件编译后的class文件保存在CLASSPATH下。
+
+之后，我们在main方法中执行如下代码。
+
+```
+ClassLoader loader1 = new MyClassLoader();
+ClassLoader loader2 = new MyClassLoader();
+Class classA1 = Class.forName("ClassA",false,loader1);
+Class classA2 = Class.forName("ClassA",false,loader2);
+```
+
+在这里，我确保d:\test\ab不会被classpath访问到，因此，我们自定义的MyLoader将主动装载ClassA类，并为之生成Class实例。但现在我构造了两个MyClassLoader的实例，但分别载入一次名为”classA”的类，将其返回值赋给了classA1和classA2变量。
+
+那么，问题是，下列语句将输出什么呢？
+
+```
+System.out.println(classA1==classA2);
+System.out.println(classA1.equels(classA2));
+```
+
+输出结果是：
+
+```
+false
+false
+```
+
+这就是类的命名空间机制。JVM为每一个ClassLoader实例（无关他们是否属于同一个ClassLoader的实现类）维系一个命名空间。对于某一个类名，例如”ClassA”，它对应的Class实例到底是哪一个，取决于在哪个命名空间找！
+因此，严格来说，类名和类实例是一对多的关系。
+
+当我对虚拟机说，给我找名叫ClassA的类，那么这是一句错误的话，因为在不告诉虚拟机限制在哪个命名空间的前提下，怎么又能唯一确定Class类的实例呢？
+
+上面的例子很明显，我在同一个虚拟机中，构造了两个同名的Class实例。他们彼此不相等！
+
+只不过如果不涉及ClassLoader的编程，我们自定义的类只会用到一个命名空间，那就是CLASSPATH的命名空间（来源于一个AppClassLoader的实例），因此，一般情况下，我们把Class的名字和实例理解为一对一的关系也没什么大问题。
+
+之后，我们尝试执行以下代码：（编译时记得声明throws Exception）
+
+```
+	Method getter1 = classA1.getMethod("getClassB",new Class[]{});
+	Object obj = getter1.invoke(null,new Object[]{}};
+	Method setter2 = classA2.getMethod("setClassB",new Class[]{Object.class}};
+	try{
+		setter2.invoke(null,new Object[]{obj});
+	}catch(InvocationTargetException e){
+		e.getTargetException().printStackTrace();
+	}
+```
+
+这段代码的意思是，使用反射，从第一个ClassA的实例利用静态方法getClassB()获取ClassB的实例，并使用第二个ClassA的静态方法setClassB(ClassB)将获取的实例赋值。
+
+之所以用反射，是因为在CLASSPATH的命名空间中是无法访问到MyClassLoader创造的命名空间的。可见反射可以跨越命名空间。
+
+其中注意`InvocationTargetException`这个异常，它由invoke抛出，用以封装该方法底层抛出的异常。也就是说，当调用Method.invoke时，假如被调用的方法抛出一个`NulPointerException`，那么invoke方法对应的抛出一个`InvocationTargetException`，然后当调用`InvocationTargetException.getTargetException()`时，将得到`NulPointerException`。
+
+这里有两个变量，声明都是ClassB classB，此时将一个命名空间中的classB，赋值另外一个命名空间的classB。两者名字都叫ClassB，字节码也完全一样。这种操作可行吗？
+
+这段代码运行的结果是：抛出`ClassCastException`。
+
+因为虚拟机根本就没有把两个ClassB当做同一种类型，因此彼此根本无法转换。这也是命名空间的妙用，不同的命名空间构造出两个彼此独立的空间，不但允许两个空间自由使用类名而不用担心重名，而且也不用担心重名类彼此转化而引发混乱。
+
+此外，我虽然没有显示地告诉虚拟机，两个ClassB应该分列不同的命名空间，但是虚拟机确实这么做了。那是因为当我们显示地告诉虚拟机用两个ClassLoader分别载入ClassA时后，两个ClassA在将符号引用转化为实例引用时，隐式的分别使用了两个ClassLoader载入ClassB，从而使ClassB也分别属于两个不同的命名空间。
+
+### 父节点委派 + 符号引用隔离 = 命名空间的共享</h1>
+
+父节点委派机制的结果，就是，同一个父节点的命名空间，会且只会被它的所有子节点共享。而子节点的命名空间，对父节点而言是透明的。
+
+这便是JVM的命名空间共享机制。
+
+这个结论源自这么几个推论。当子节点ClassLoader试图翻译某个能被其父节点装载的类名时，这个装载工作在“父节点委派机制”的影响下，一定会被父节点夺走。子节点根本得不到装载的机会，自然不会将该类名添加自自己的命名空间。因此，子节点使用的是父节点命名空间中的类实例。这一条对于所有的子节点都成立。
+
+而父节点一定访问不到子节点命名空间中的类，这可以用反证法得到。因为如果父节点能访问到，那么根据“父节点委派机制”，父节点会夺走所有子节点的这部分工作，最终该类应该属于父节点的命名空间，而不是某个子节点的。
+
+Java提供了三个ClassLoader，它们分别是：Bootstrap、Extension、System（或App）。
+
+其中，Bootstrap是老大，它是一切ClassLoader的父亲节点。当你宣布你的ClassLoader，的父亲节点为null时，那么你的ClassLoader将主动以Bottstrap为父亲节点。它也是Java中唯一一个不是ClassLoader类实例的加载器。当你试图得到Bootstrap时，得到的是null。
+
+如果说Bootstrap的本尊是null的话，那么JVM启动过程就是无极生太极、太极生两仪、两仪生四象、四象生八卦、八卦生万物的过程。
+
+Bootstrap载入%JAVAHOME%\jre\rt.jar 中的类。这里面几乎包含了Java标准库80%的类。
+
+由于Bootstrap是铁打的老大，一切ClassLoader的祖宗，因此，根据“父节点委派机制”，它拥有至高无上的裁决权。因此，任何一个命名空间，一定可以访问到Bootstrap的命名空间，也就是可以访问Java标准库中80%的内容。
+
+同样，假如有一名黑客想要制造一种侵入JVM的病毒，通过在应用程序的命名空间之外加一个病毒加载器，这个病毒加载器替换很多Java标准类库，以达到入侵的目的。这时，这名黑客会发现它的病毒加载器必须以Bootstrap作为父节点，而Bootstrap将粗暴的打断一切病毒加载器企图入侵的行为。
+
+Extension加载器是Bootstrap的子节点。它将载入Java标准库剩余20%的内容。我看了下，有NIO、XML的处理类。是Bootstrap的子节点意味着Extension是可以被替换的，安全性远没有Bootstrap那么高。我个人认为这个加载器没什么好说的。
+
+System加载器又叫做应用加载器，它负责从CLASSPATH路径中加载类，也是Extension的子节点。因为“父节点委派机制”的存在，即便Java标准类库没有出现在CLASSPATH中，应用程序也可以访问到它们。
+
+另外，System加载器也是`void main(String[])`所在类的加载器。这意味着，除了Java的标准库，应用程序中所有的自定义类全部都是System加载器加载的（不使用显示加载的话）。
