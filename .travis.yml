@@ -1,0 +1,19 @@
+language: java
+jdk:
+  - oraclejdk8
+rvm:
+ - 2.2
+env:
+- secure: "eC7jtA3Tnq+gDo1wvLRXjfqRg0Auwjt21Vlvgs6PXx+n6fHXl//GJSEfy/cn5HEjwH1i3pqygDkWtjU/hugWD2arY2pC6hDGv+aq/EeX9NyJVzmVx74RTHYatasMLVrvyfxwtEUjvu7bB6I5ByvdN/xnZqcRf01S/E2IyGvQhxZ49UBrPsZV5OvLOdoSsqiUy35WMsIcYNwMkbHtBGivUxx6pQzLsIViVqKyr+ysx8S6SKLylmynmUOxbeMIw+K9ASvyAITG+OcUr9gfWpIK6QzgkSL+wCf7gciZpcwAw/R953eK7DuPEupBILwXgr+1+eEwxs4WLbEaP5YxAqgLi8ITlBVA1CDmXKMLeS9m7JWWgSFNP0lkzuT6HJnNMAPRKES/fvVbnFi9SA6gFdyjI5Hi/4RTOWgIuCFuvsOUhmuE7ISzZGVyhqcV5zKeTmbA53gptUgQ4fALXWWo26DhI6qojARxMaiOKJSc6hGR2p/o/aqVRQyi9FFnhvzSuYDCM1EeSAN/GF3eUgTxjGBkFVtinGNKJ1QvFdiNlF9H5v23sSwA6oyX6Q1JrCyYyG68Z74wxzMrLuWGC+GjBs5CiCdrYtRw6oEglYV1XuvqpaHS3pafg9iQogkxIkZAn+ThMLHQFRw64nnqYne9yoKMyVo0WxOBrCdWeO6C2WfBINA="
+git:
+  submodules: false
+before_install:
+- git config --global user.email "$GIT_EMAIL"
+- git config --global user.name "$GIT_NAME"
+- ./scripts/install-calico.sh
+- git submodule update --init --recursive
+- git submodule foreach git pull origin master
+- git submodule foreach git checkout master
+script:
+- ./Calico/release/bin/calico build
+- ./scripts/publish.sh
