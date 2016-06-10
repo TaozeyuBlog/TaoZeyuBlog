@@ -22,6 +22,6 @@ git remote remove origin
 git remote add origin https://$GH_TOKEN@github.com/Moskize91/Moskize91.github.io.git
 git add -A .
 git commit -m "update by travis."
-git push origin master
+git push origin master --quiet
 
 checkError $? "Publish Success."
