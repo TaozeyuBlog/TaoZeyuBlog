@@ -3,10 +3,6 @@ layout : post
 node : technology
 title : 远程工作：我们把 iOS 的 Cocoa Touch 移植到了 Android
 ---
-作者：moskize
-链接：https://zhuanlan.zhihu.com/p/20710885
-来源：知乎
-著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
 
 这是我最近一年在做的项目，用我们老大 tiny 的话说，就是“能不能弄一个东西，让我的 iOS 程序一行代码不用改，却能运行在 Android 上”。为了这个目标，我们最后弄出了个这样的东西。
 
@@ -26,7 +22,7 @@ title : 远程工作：我们把 iOS 的 Cocoa Touch 移植到了 Android
 
 我本人的工作主要是把 Cocoa Touch 层移植到 Android 上去。具体就是如图：
 
-![](https://pic4.zhimg.com/4c3da5f9f85cbff5118a2be53e108227_b.jpg)
+![](pic4.zhimg.com/4c3da5f9f85cbff5118a2be53e108227_b.jpg)
 
 把最上面那个青蓝色的方块移植到 Android 上去。顺便一提，iOS 的很多库是和 Mac 共用的。Apple 会用开源项目，Apple 自己闭源的东西会被别人开源。因此，如果是有历史的库，而且和 Mac 共用的库，一般都有开源项目可利用。但是 Cocoa Touch 层就比较坑爹，几乎没有可用的开源项目可直接使用。
 
