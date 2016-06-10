@@ -1,0 +1,7 @@
+[submodule "TaoZeyuBlogTemplate"]
+	path = TaoZeyuBlogTemplate
+	url = git@github.com:TaozeyuBlog/TaoZeyuBlogTemplate.git
+
+[submodule "Moskize91.github.io"]
+	path = Moskize91.github.io
+	url = git@github.com:Moskize91/Moskize91.github.io.git

@@ -1,0 +1,9 @@
+port 8080
+
+resource ./
+template git@github.com:TaozeyuBlog/TaoZeyuBlogTemplate.git
+target git@github.com:Moskize91/Moskize91.github.io.git
+root /main.html
+ignore-copy baidu_verify_RtFAxAJIKE\.html README\.md .*\.esproj
+ignore-clean .*\.git.*
+debug-working-directory /Users/taozeyu/Codes/MyProjects/Java/Calico/
