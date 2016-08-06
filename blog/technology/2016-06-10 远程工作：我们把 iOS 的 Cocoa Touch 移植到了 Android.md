@@ -1,7 +1,7 @@
 ---
-layout : post
+layout: blog
+published: true
 node : technology
-title : 远程工作：我们把 iOS 的 Cocoa Touch 移植到了 Android
 ---
 
 这是我最近一年在做的项目，用我们老大 tiny 的话说，就是“能不能弄一个东西，让我的 iOS 程序一行代码不用改，却能运行在 Android 上”。为了这个目标，我们最后弄出了个这样的东西。

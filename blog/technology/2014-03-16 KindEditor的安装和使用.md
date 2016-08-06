@@ -1,6 +1,6 @@
 ---
-node : technology
-title: KindEditor的安装和使用
+layout: blog
+published: true
 ---
 
 因为想要做一个可以发表格式化文章的网站，所以我需要一个网页版的所见即所得的文本编辑器。而KindEditor就是这么一个开源的文本编辑器。

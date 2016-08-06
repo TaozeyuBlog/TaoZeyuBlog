@@ -1,7 +1,6 @@
 ---
-layout : post
-node : technology
-title : ECMAScript 6，令Node.js也可以写出同步执行的代码（上）
+layout: blog
+published: true
 ---
 
 #引言

@@ -1,6 +1,6 @@
 ---
-node : technology
-title: KindEditor上传图片
+layout: blog
+published: true
 ---
 
 通过之前的文章《KindEditor的安装和使用》的介绍，我们已经可以令我们的网页上出现一个KindEditor在线文本编辑器。我们可以直接使用它，在里面添加文字，编辑其格式，排版什么的。完了，我们还可以把内容提交到服务器（用于发表文章，编辑文章等，这就看具体业务需求了）。

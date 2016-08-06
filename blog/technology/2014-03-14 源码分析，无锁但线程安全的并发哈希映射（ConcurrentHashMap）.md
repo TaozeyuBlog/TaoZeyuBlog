@@ -1,6 +1,6 @@
 ---
-node : technology
-title : 源码分析，无锁但线程安全的并发哈希映射（ConcurrentHashMap）
+layout: blog
+published: true
 ---
 ConcurrentHashMap是一个线程安全的哈希实现类，它不但能使多线程同时操作该类时保证线程是安全的，同时为了保证对Map的读操作的高效，完全不使用同步锁。<br />
 实现单线程，或简单通过加锁来实现线程安全的一个哈希表所用到的数据结构知识是很普通的，但如果不加锁，也能保证线程安全，则需要用到一些“奇技淫巧”了。<br />
