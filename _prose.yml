@@ -1,5 +1,5 @@
 prose:
-  rooturl: 'articles'
+  rooturl: 'blog'
   siteurl: 'http://taozeyu.com/'
   media: 'media'
   ignore:
@@ -9,7 +9,7 @@ prose:
     - /TaoZeyuBlogTemplate
     - /Moskize91.github.io
   metadata:
-    articles:
+    blog:
       - name: "original"
         field:
           element: "hidden"
