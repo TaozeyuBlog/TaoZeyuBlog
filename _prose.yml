@@ -1,0 +1,16 @@
+prose:
+  rooturl: 'articles'
+  siteurl: 'http://taozeyu.com/'
+  media: 'media'
+  ignore:
+    - .calico
+    - groups.json
+    - /scripts
+    - /TaoZeyuBlogTemplate
+    - /Moskize91.github.io
+  metadata:
+    articles:
+      - name: "original"
+        field:
+          element: "hidden"
+          value: "true"

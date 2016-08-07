@@ -1,9 +1,32 @@
-port 8080
+conf.port = 8080;
 
-resource ./
-template git@github.com:TaozeyuBlog/TaoZeyuBlogTemplate.git
-target git@github.com:Moskize91/Moskize91.github.io.git
-root /main.html
-ignore-copy .*\.git.* baidu_verify_RtFAxAJIKE\.html README\.md .*\.esproj
-ignore-clean .*\.git.*
-debug-working-directory /Users/taozeyu/Codes/MyProjects/Java/Calico/
+conf.resource_directory = "./";
+conf.template_directory = "./TaoZeyuBlogTemplate";
+conf.target_directory = "./Moskize91.github.io";
+
+conf.root_page = "/main.html";
+conf.linked_resource_assets_path = ["public", "media"];
+
+conf.redirect = {
+
+    "/2014-12-08-fps-game-from-zhihu.html" : "/article/2015-12-08-wei-shen-me-ren-wei-you-xi-zhen-shu-yao-dao-60-zhen-mei-miao-cai-liu-chang-er-da-bu-fen-dian-ying-zhen-shu-zhi-you-24-zhen-mei-miao.html",
+
+    "/2016-06-10-remote-wo-men-ba-ios-de-cocoa-touch-yi-zhi-dao-le-android.html" : "/article/2016-06-10-yuan-cheng-gong-zuo-wo-men-ba-iOS-de-Cocoa-Touch-yi-zhi-dao-le-Android.html",
+
+    "/software/2014/03/16/KindEditor-upload-images.html" : "/article/2014-03-17-KindEditor-shang-chuan-tu-pian.html",
+
+    "/software/2014/03/16/KindEditor-installment-and-use.html" : "/article/2014-03-16-KindEditor-de-an-zhuang-he-shi-yong.html",
+
+    "/software/2014/03/14/concurrent-hash-source-code-analyze.html" : "/article/2014-03-14-yuan-ma-fen-xi-wu-suo-dan-xian-cheng-an-quan-de-bing-fa-ha-xi-ying-she-ConcurrentHashMap.html",
+
+    "/software/2014/03/26/eleven-important-database-designing-rules-which-I-follow.html" : 
+    "/article/2014-03-26-wei-ruan-gong-cheng-shi-jian-yi-de-11-tiao-shu-ju-ku-she-ji-zhun-ze.html",
+
+    "/software/2014/03/15/jvm-class-loader.html" : "/article/2014-03-14-JVM-lei-zhuang-zai-ji-zhi-de-jie-xi-yi-ji-re-geng-xin-de-tan-tao-yi.html",
+
+    "/software/2014/03/15/jvm-class-loader-2.html" : "/article/2014-03-15-JVM-lei-zhuang-zai-ji-zhi-de-jie-xi-yi-ji-re-geng-xin-de-tan-tao-er.html",
+};
+
+for (var path in conf.redirect) {
+    conf.seeds.push(path);
+}
