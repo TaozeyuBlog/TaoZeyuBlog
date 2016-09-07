@@ -1,7 +1,3 @@
 [submodule "TaoZeyuBlogTemplate"]
 	path = TaoZeyuBlogTemplate
 	url = https://github.com/TaozeyuBlog/TaoZeyuBlogTemplate.git
-
-[submodule "Moskize91.github.io"]
-	path = Moskize91.github.io
-	url = https://github.com/Moskize91/Moskize91.github.io.git

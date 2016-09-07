@@ -18,10 +18,8 @@ if [ "$TRAVIS_BRANCH" != "master" ]&&[ "$TRAVIS_BRANCH" != "develop" ]; then
 fi
 
 cd Moskize91.github.io
-git remote remove origin
-git remote add origin https://$GH_TOKEN@github.com/Moskize91/Moskize91.github.io.git
 git add -A .
 git commit -m "update by travis."
-git push origin master --quiet
+git push origin master
 
-checkError $? "Publish Success."
+checkError $? "Publish Fail."
