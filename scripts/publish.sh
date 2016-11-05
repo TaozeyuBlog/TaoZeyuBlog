@@ -17,9 +17,9 @@ if [ "$TRAVIS_BRANCH" != "master" ]&&[ "$TRAVIS_BRANCH" != "develop" ]; then
   exit 0
 fi
 
-cd Moskize91.github.io
-git add -A .
-git commit -m "update by travis."
-git push origin master
+# cd Moskize91.github.io
+# git add -A .
+# git commit -m "update by travis."
+# git push origin master
 
-checkError $? "Publish Fail."
+# checkError $? "Publish Fail."
